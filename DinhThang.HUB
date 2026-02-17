@@ -1,0 +1,197 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+local ESPEnabled = false
+local AimEnabled = false
+
+-- ===== MENU =====
+local ScreenGui = Instance.new("ScreenGui", game.CoreGui)
+
+local Frame = Instance.new("Frame", ScreenGui)
+Frame.Size = UDim2.new(0,180,0,120)
+Frame.Position = UDim2.new(0.02,0,0.3,0)
+Frame.BackgroundColor3 = Color3.fromRGB(40,40,40)
+
+Instance.new("UICorner", Frame)
+
+-- ===== TITLE =====
+local Title = Instance.new("TextLabel", Frame)
+Title.Size = UDim2.new(1,0,0,25)
+Title.BackgroundColor3 = Color3.fromRGB(30,30,30)
+Title.Text = "DinhThang - HUB"
+Title.TextColor3 = Color3.new(1,1,1)
+Title.Font = Enum.Font.SourceSansBold
+Title.TextSize = 16
+Title.TextXAlignment = Enum.TextXAlignment.Center
+
+Instance.new("UICorner", Title)
+
+-- ===== CREATE BUTTON =====
+local function createButton(text,pos,callback)
+
+    local btn = Instance.new("TextButton", Frame)
+    btn.Size = UDim2.new(1,-10,0,30)
+    btn.Position = UDim2.new(0,5,0,pos)
+    btn.BackgroundColor3 = Color3.fromRGB(60,60,60)
+    btn.TextColor3 = Color3.new(1,1,1)
+    btn.Font = Enum.Font.SourceSansBold
+    btn.TextSize = 14
+    btn.Text = text
+    
+    Instance.new("UICorner", btn)
+
+    btn.MouseButton1Click:Connect(function()
+        callback(btn)
+    end)
+end
+
+-- ===== BUTTON ESP =====
+createButton("ESP : OFF",30,function(btn)
+    ESPEnabled = not ESPEnabled
+    btn.Text = "ESP : "..(ESPEnabled and "ON" or "OFF")
+end)
+
+-- ===== BUTTON AIM =====
+createButton("AIMBOT : OFF",70,function(btn)
+    AimEnabled = not AimEnabled
+    btn.Text = "AIMBOT : "..(AimEnabled and "ON" or "OFF")
+end)
+
+-- ===== CHECK ENEMY =====
+local function isEnemy(player)
+    return player.Team ~= LocalPlayer.Team
+end
+
+-- ===== ESP FUNCTION =====
+local function applyESP(player,character)
+    if player == LocalPlayer then return end
+    
+    local head = character:WaitForChild("Head",5)
+    local humanoid = character:WaitForChild("Humanoid",5)
+    if not head or not humanoid then return end
+
+    -- Highlight
+    local hl = character:FindFirstChild("HL") or Instance.new("Highlight",character)
+    hl.Name = "HL"
+    hl.FillTransparency = 1
+    hl.OutlineTransparency = 0
+    
+    -- Name GUI
+    local gui = head:FindFirstChild("ESP") or Instance.new("BillboardGui",head)
+    gui.Name = "ESP"
+    gui.Size = UDim2.new(0,120,0,25)
+    gui.StudsOffset = Vector3.new(0,2,0)
+    gui.AlwaysOnTop = true
+    
+    local label = gui:FindFirstChild("Name") or Instance.new("TextLabel",gui)
+    label.Name = "Name"
+    label.Size = UDim2.new(1,0,1,0)
+    label.BackgroundTransparency = 1
+    label.Font = Enum.Font.SourceSansBold
+    label.TextSize = 10
+    label.TextStrokeTransparency = 0
+    label.TextStrokeColor3 = Color3.new(0,0,0)
+    
+    label.Text = player.Name
+
+    -- Health Bar
+    local hp = character:FindFirstChild("HPBar")
+    if not hp then
+        hp = Instance.new("BillboardGui",character)
+        hp.Name = "HPBar"
+        hp.Size = UDim2.new(0,4,0,40)
+        hp.StudsOffset = Vector3.new(2,0,0)
+        hp.AlwaysOnTop = true
+        
+        local bar = Instance.new("Frame",hp)
+        bar.Name = "Bar"
+        bar.Size = UDim2.new(1,0,1,0)
+        bar.BackgroundColor3 = Color3.new(0,1,0)
+    end
+    
+    local bar = hp.Bar
+
+    -- Update loop
+    RunService.RenderStepped:Connect(function()
+        if not character.Parent then return end
+        
+        if ESPEnabled then
+            gui.Enabled = true
+            hp.Enabled = true
+            
+            if player.Team then
+                local color = player.Team.TeamColor.Color
+                hl.OutlineColor = color
+                label.TextColor3 = color
+            end
+            
+            -- Health update
+            if humanoid.Health > 0 then
+                bar.Size = UDim2.new(1,0,humanoid.Health/humanoid.MaxHealth,0)
+            end
+            
+        else
+            gui.Enabled = false
+            hp.Enabled = false
+        end
+    end)
+end
+
+-- ===== AIMBOT =====
+RunService.RenderStepped:Connect(function()
+    if not AimEnabled then return end
+    
+    local closest = nil
+    local dist = math.huge
+    
+    for _,player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and isEnemy(player) then
+            
+            local char = player.Character
+            if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Humanoid") then
+                
+                if char.Humanoid.Health > 0 then
+                    
+                    local pos,visible = Camera:WorldToViewportPoint(char.HumanoidRootPart.Position)
+                    
+                    if visible then
+                        local diff = (Vector2.new(pos.X,pos.Y) -
+                            Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y/2)).Magnitude
+                        
+                        if diff < dist then
+                            dist = diff
+                            closest = char
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    if closest then
+        Camera.CFrame = CFrame.new(Camera.CFrame.Position,closest.HumanoidRootPart.Position)
+    end
+end)
+
+-- ===== PLAYER SETUP =====
+local function setup(player)
+
+    if player == LocalPlayer then return end
+    
+    player.CharacterAdded:Connect(function(char)
+        task.wait(1)
+        applyESP(player,char)
+    end)
+    
+    if player.Character then
+        applyESP(player,player.Character)
+    end
+end
+
+for _,p in pairs(Players:GetPlayers()) do
+    setup(p)
+end
+
+Players.PlayerAdded:Connect(setup) 
